@@ -71,8 +71,6 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-````
-
 ##⚡ Features & UsageThe dashboard provides real-time access to financial markets through an interactive sidebar.
 
 1. **Select Assets:** Use the sidebar to choose multiple tickers (e.g., AAPL, BTC-USD, GOOGL).
@@ -124,4 +122,7 @@ _Built by [@bana0615](https://www.google.com/search?q=https://github.com/bana061
 
 **License**
 [MIT](https://www.google.com/search?q=LICENSE) - Copyright (c) 2025 One Buffalo Labs
-````
+
+```
+
+```

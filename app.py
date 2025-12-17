@@ -11,16 +11,25 @@ st.write("One Buffalo Labs - Financial Dashboard")
 st.sidebar.header("Configuration")
 
 # Sidebar Multiselect
-available_tickers = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'BTC-USD', 'ETH-USD', 'SPY']
+available_tickers = [
+    "AAPL",
+    "GOOGL",
+    "MSFT",
+    "AMZN",
+    "TSLA",
+    "BTC-USD",
+    "ETH-USD",
+    "SPY",
+]
 selected_tickers = st.sidebar.multiselect(
     "Select Assets to Analyze",
     options=available_tickers,
-    default=['AAPL', 'BTC-USD', 'GOOGL']
+    default=["AAPL", "BTC-USD", "GOOGL"],
 )
 
 # --- Main Analysis ---
 if selected_tickers:
-    with st.spinner('Fetching market data...'):
+    with st.spinner("Fetching market data..."):
         try:
             # Fetch Data
             raw_data = fetch_stock_data(selected_tickers)
@@ -28,11 +37,11 @@ if selected_tickers:
             # Extract just the 'Close' prices for cleaner analysis
             # We handle the MultiIndex structure (Ticker -> OHLCV)
             if len(selected_tickers) > 1:
-                close_prices = raw_data.xs('Close', level=1, axis=1)
+                close_prices = raw_data.xs("Close", level=1, axis=1)
             else:
                 # Handle single ticker case where structure might differ slightly
                 # Re-indexing to ensure it's a DataFrame
-                close_prices = raw_data['Close'].to_frame(name=selected_tickers[0])
+                close_prices = raw_data["Close"].to_frame(name=selected_tickers[0])
 
             # Apply Transformations
             normalized_data = normalize_data(close_prices)

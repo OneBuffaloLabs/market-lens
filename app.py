@@ -1,90 +1,92 @@
 import streamlit as st
 import plotly.express as px
-from data_loader import fetch_stock_data, normalize_data, calculate_daily_returns
+import pandas as pd
+from data_loader import fetch_stock_data, calculate_portfolio_value
 
-# --- App Configuration ---
+# --- Configuration ---
 st.set_page_config(page_title="Market Lens", page_icon="📈", layout="wide")
 
+# Hardcoded Mock Portfolio
+# In a real app, this would come from a database or user input
+MOCK_PORTFOLIO = {
+    'AAPL': 50,      # 50 shares of Apple
+    'BTC-USD': 0.5,  # 0.5 Bitcoin
+    'NVDA': 20,      # 20 shares of Nvidia
+    'TSLA': 30       # 30 shares of Tesla
+}
+
 st.title("Market Lens 📈")
+st.caption("One Buffalo Labs - Portfolio Simulation")
 
 # --- Sidebar ---
-st.sidebar.header("Configuration")
-available_tickers = ['AAPL', 'GOOGL', 'MSFT', 'AMZN', 'TSLA', 'BTC-USD', 'ETH-USD', 'SPY']
-selected_tickers = st.sidebar.multiselect(
-    "Select Assets to Analyze",
-    options=available_tickers,
-    default=['AAPL', 'BTC-USD', 'GOOGL']
-)
+st.sidebar.header("Portfolio Settings")
+st.sidebar.write("Current Holdings:")
+st.sidebar.json(MOCK_PORTFOLIO)
 
-if selected_tickers:
-    with st.spinner('Fetching market data...'):
-        try:
-            # 1. Fetch Data
-            raw_data = fetch_stock_data(selected_tickers)
+# --- Main Execution ---
+with st.spinner('Calculating portfolio value...'):
+    try:
+        # Fetch Data for Portfolio Assets
+        tickers = list(MOCK_PORTFOLIO.keys())
+        raw_data = fetch_stock_data(tickers)
 
-            # Handle Single Ticker vs Multi-Ticker Data Structure
-            if len(selected_tickers) == 1:
-                ticker = selected_tickers[0]
-                close_prices = raw_data['Close'].to_frame(name=ticker)
-                volume_data = raw_data['Volume'].to_frame(name=ticker)
-                # Helper to access specific ticker data for metrics
-                def get_ticker_data(t): return raw_data
-            else:
-                close_prices = raw_data.xs('Close', level=1, axis=1)
-                volume_data = raw_data.xs('Volume', level=1, axis=1)
-                def get_ticker_data(t): return raw_data[t]
+        # Calculate Portfolio History
+        total_value_series = calculate_portfolio_value(raw_data, MOCK_PORTFOLIO)
 
-            # Key Metrics Row (Task 4.4)
-            st.header("Key Metrics")
+        # Current Stats
+        current_total_value = total_value_series.iloc[-1]
+        start_total_value = total_value_series.iloc[0]
+        total_return = ((current_total_value - start_total_value) / start_total_value) * 100
 
-            # Create a dynamic number of columns based on selection (max 4 per row recommended)
-            cols = st.columns(len(selected_tickers))
+        # --- Top Row Metrics ---
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Portfolio Value", f"${current_total_value:,.2f}")
+        col2.metric("Total Return", f"{total_return:+.2f}%")
+        col3.metric("Assets Tracked", len(tickers))
 
-            for idx, ticker in enumerate(selected_tickers):
-                data = get_ticker_data(ticker)
+        st.divider()
 
-                # Calculate Metrics
-                current_price = data['Close'].iloc[-1]
-                prev_price = data['Close'].iloc[-2]
-                delta = ((current_price - prev_price) / prev_price) * 100
-                ath = data['High'].max()
+        # --- Charts ---
+        chart_col1, chart_col2 = st.columns([2, 1])
 
-                # Display Metric
-                with cols[idx]:
-                    st.metric(
-                        label=f"{ticker} (ATH: ${ath:,.2f})",
-                        value=f"${current_price:,.2f}",
-                        delta=f"{delta:+.2f}%"
-                    )
-
-            # Charts
-            st.divider()
-
-            # Chart 1: Price History (Normalized)
-            # We use normalized data so BTC ($90k) and AAPL ($200) can be compared on one chart
-            normalized_data = normalize_data(close_prices)
-
-            st.subheader("Relative Price Performance")
-            st.write("Performance relative to the start of the period (Base = 100).")
-
-            fig_price = px.line(
-                normalized_data,
-                title="Price History (Normalized)",
-                labels={"value": "Rebased Price (100)", "variable": "Asset"}
+        with chart_col1:
+            # Total Portfolio Value Chart
+            st.subheader("Portfolio Performance (1 Year)")
+            fig_history = px.line(
+                total_value_series,
+                title="Total Value Over Time",
+                labels={"value": "Value ($)", "Date": "Date"}
             )
-            st.plotly_chart(fig_price, use_container_width=True)
+            # Add a filled area under the line for a "wealth" effect
+            fig_history.update_traces(fill='tozeroy')
+            st.plotly_chart(fig_history, use_container_width=True)
 
-            # Chart 2: Volume
-            st.subheader("Trading Volume")
-            fig_volume = px.area(
-                volume_data,
-                title="Daily Trading Volume",
-                labels={"value": "Volume", "variable": "Asset"}
+        with chart_col2:
+            # Asset Allocation Pie Chart
+            st.subheader("Asset Allocation")
+
+            # Calculate current value per asset for the pie chart
+            current_prices = {ticker: raw_data[ticker]['Close'].iloc[-1] for ticker in tickers}
+            allocation_data = {
+                'Asset': tickers,
+                'Value': [price * MOCK_PORTFOLIO[t] for t, price in current_prices.items()]
+            }
+            df_allocation = pd.DataFrame(allocation_data)
+
+            fig_pie = px.pie(
+                df_allocation,
+                values='Value',
+                names='Asset',
+                title="Current Allocation",
+                hole=0.4 # Donut chart style
             )
-            st.plotly_chart(fig_volume, use_container_width=True)
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-        except Exception as e:
-            st.error(f"Error processing data: {e}")
-            st.exception(e) # Prints the stack trace for easier debugging
-else:
-    st.info("Please select at least one ticker from the sidebar to begin.")
+        # --- Detailed Data View ---
+        with st.expander("View Portfolio Data"):
+            st.dataframe(total_value_series.to_frame(name="Total Value"))
+
+    except Exception as e:
+        st.error(f"Error calculating portfolio: {e}")
+        # Hint: If fetching fails, it's often because a ticker in the hardcoded list is invalid
+        st.write("Debug info: Check if tickers in MOCK_PORTFOLIO are valid and reachable.")
